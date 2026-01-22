@@ -38,6 +38,7 @@ def build_instance_dict(root_folder):
                                     elif episode_name not in instance_dict[game_name][experiment_name]:
                                         instance_dict[game_name][experiment_name].append(episode_name)
     # sort the dict and its nested dicts and lists for consistency
+    instance_dict = dict(sorted(instance_dict.items()))
     for game_name in instance_dict:
         instance_dict[game_name] = dict(sorted(instance_dict[game_name].items()))
         for experiment_name in instance_dict[game_name]:
