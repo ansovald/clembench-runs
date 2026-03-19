@@ -118,22 +118,23 @@ def count_missing_scores(root_folder, instance_dict):
     return missing_interactions, missing_scores
 
 
-# Set the root folder path
-root_folder = "v3.0"
+if __name__ == "__main__":
+    # Set the root folder path
+    root_folder = "v3.0"
 
-import json
-instance_dict, out_of_place_dirs = build_instance_dict(root_folder)
-with open(os.path.join(root_folder, 'instance_dict.json'), 'w') as f:
-    json.dump(instance_dict, f, indent=4)
+    import json
+    instance_dict, out_of_place_dirs = build_instance_dict(root_folder)
+    with open(os.path.join(root_folder, 'instance_dict.json'), 'w') as f:
+        json.dump(instance_dict, f, indent=4)
 
-print(f"Out of place directories: {len(out_of_place_dirs)}")
-for dir in out_of_place_dirs:
-    print(dir)
+    print(f"Out of place directories: {len(out_of_place_dirs)}")
+    for dir in out_of_place_dirs:
+        print(dir)
 
-missing_interactions, missing_scores = count_missing_scores(root_folder, instance_dict)
+    missing_interactions, missing_scores = count_missing_scores(root_folder, instance_dict)
 
-with open(os.path.join(root_folder, 'missing_interactions.json'), 'w') as f:
-    json.dump(missing_interactions, f, indent=4)
+    with open(os.path.join(root_folder, 'missing_interactions.json'), 'w') as f:
+        json.dump(missing_interactions, f, indent=4)
 
-with open(os.path.join(root_folder, 'missing_scores.json'), 'w') as f:
-    json.dump(missing_scores, f, indent=4)
+    with open(os.path.join(root_folder, 'missing_scores.json'), 'w') as f:
+        json.dump(missing_scores, f, indent=4)
