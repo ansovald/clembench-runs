@@ -26,14 +26,27 @@ def count_tokens(turn: dict) -> int:
     elif type(turn['action']['content']) == str :
         text_content = turn['action']['content']
     else:
-        raise TypeError(f"Expected the turn content in either str or dict format, but received {type(text_content)} for turn : {turn}")
+        raise TypeError(
+            "Expected turn['action']['content'] to be str or dict, but received "
+            f"{type(turn['action']['content'])} for turn: {turn}"
+        )
 
     tokens = tokenizer(text_content) 
     return len(tokens["input_ids"])
 
+def _is_programmatic(player_value):
+    if isinstance(player_value, str):
+        return "programmatic" in player_value.lower()
+    if isinstance(player_value, dict):
+        for key in ("name", "type", "model", "player", "class"):
+            val = player_value.get(key)
+            if isinstance(val, str) and "programmatic" in val.lower():
+                return True
+        return "programmatic" in json.dumps(player_value).lower()
+    return False
 
 root_dirs = os.listdir()
-versions = [ver for ver in root_dirs if ver.startswith('v')]
+versions = [ver for ver in root_dirs if re.match(r"^v\\d", ver) and os.path.isdir(ver)]
 
 for version in versions:
     tokens = {}
@@ -42,9 +55,11 @@ for version in versions:
     for model in tqdm(models, desc=f"Calculating Tokens for models in benchmark version - {version}"):
         # Use regex to split model names and handle temperature values
         match = re.match(r"(.+?)-t\d\.\d--(.+?)-t\d\.\d", model)
-        if match:
-            model1_name = match.group(1)
-            model2_name = match.group(2)
+        if not match:
+            logging.warning(f"Skipping model folder with unexpected name format: {version}/{model}")
+            continue
+        model1_name = match.group(1)
+        model2_name = match.group(2)
         if model1_name not in tokens:
             tokens[model1_name] = {'input_tokens': 0.0, 'output_tokens': 0.0, 'input_message_count':0, 'output_message_count':0}
         if model2_name not in tokens:
@@ -75,17 +90,17 @@ for version in versions:
                         # Set a false flag when a player is Programmatic
                         # Check for "Player_1" or "Player 1" keys
                         if "Player_1" in players:
-                            if "programmatic" in players['Player_1'].lower():
+                            if _is_programmatic(players['Player_1']):
                                 player1 = False
                         elif "Player 1" in players:
-                            if "programmatic" in players['Player 1'].lower():
+                            if _is_programmatic(players['Player 1']):
                                 player1 = False
 
                         if "Player_2" in players:
-                            if "programmatic" in players['Player_2'].lower():
+                            if _is_programmatic(players['Player_2']):
                                 player2 = False
                         elif "Player 2" in players:
-                            if "programmatic" in players['Player 2'].lower():
+                            if _is_programmatic(players['Player 2']):
                                 player2 = False 
 
                         turns = json_data['turns']
@@ -93,11 +108,17 @@ for version in versions:
                         last_input_tokens = 0
                         for turn in turns:
                             for t in turn:
-                                if t['from'] == "GM" and ("1" in t['to'] or "2" in t['to']):
-                                    # Most recent message from GM to Player 1 or Player 2
+                                if t['from'] == "GM" and "1" in t['to']:
+                                    # Most recent message from GM to Player 1
                                     input_tokens = count_tokens(t)
                                     last_input_tokens += input_tokens
                                     tokens[model1_name]['input_tokens'] += last_input_tokens
+                                    tokens[model1_name]['input_message_count'] += 1
+                                elif t['from'] == "GM" and "2" in t['to']:
+                                    # Most recent message from GM to Player 2
+                                    input_tokens = count_tokens(t)
+                                    last_input_tokens += input_tokens
+                                    tokens[model2_name]['input_tokens'] += last_input_tokens
                                     tokens[model2_name]['input_message_count'] += 1
                                 elif "1" in t['from'] and t['to'] == "GM" and player1:
                                     # Message from Player 1 to GM
@@ -131,7 +152,14 @@ for version in versions:
             avg_input_tokens = int(tokens[k]['input_tokens'] / tokens[k]['input_message_count'])
             avg_output_tokens = int(tokens[k]['output_tokens'] / tokens[k]['output_message_count'])
         except ZeroDivisionError:
-            print(f"ZeroDivisionError for model {k} - input_message_count: {tokens[k]['input_message_count']}, output_message_count: {tokens[k]['output_message_count']}")
+            logging.warning(
+                "ZeroDivisionError for model %s - input_message_count: %s, output_message_count: %s",
+                k,
+                tokens[k]['input_message_count'],
+                tokens[k]['output_message_count'],
+            )
+            avg_input_tokens = 0
+            avg_output_tokens = 0
 
         model_avg_input_tokens.append(avg_input_tokens)
         model_avg_output_tokens.append(avg_output_tokens)

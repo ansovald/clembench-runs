@@ -9,7 +9,7 @@ import re  # Add this import at the top of your file if not already present
 logging.basicConfig(filename='latency.log', level=logging.INFO)
 
 root_dirs = os.listdir()
-versions = [ver for ver in root_dirs if ver.startswith('v')]
+versions = [ver for ver in root_dirs if re.match(r"^v\\d", ver) and os.path.isdir(ver)]
 
 
 for version in versions:
@@ -19,9 +19,11 @@ for version in versions:
     for model in tqdm(models, desc=f"Calculating latencies for version - {version}"):
         # Use regex to split model names and handle temperature values
         match = re.match(r"(.+?)-t\d\.\d--(.+?)-t\d\.\d", model)
-        if match:
-            model1_name = match.group(1)
-            model2_name = match.group(2)
+        if not match:
+            logging.warning(f"Skipping model folder with unexpected name format: {version}/{model}")
+            continue
+        model1_name = match.group(1)
+        model2_name = match.group(2)
         if model1_name not in latencies:
             latencies[model1_name] = {'time': 0.0, 'turns': 0}
         if model2_name not in latencies:
@@ -29,6 +31,18 @@ for version in versions:
 
         games = os.listdir(os.path.join(version, model))
         games = [g for g in games if os.path.isdir(os.path.join(version, model, g))]
+
+        def _is_programmatic(player_value):
+            if isinstance(player_value, str):
+                return "programmatic" in player_value.lower()
+            if isinstance(player_value, dict):
+                for key in ("name", "type", "model", "player", "class"):
+                    val = player_value.get(key)
+                    if isinstance(val, str) and "programmatic" in val.lower():
+                        return True
+                # Fallback: stringified dict search
+                return "programmatic" in json.dumps(player_value).lower()
+            return False
         
         for game in games:
             experiments = os.listdir(os.path.join(version, model, game))
@@ -51,17 +65,17 @@ for version in versions:
                         # Set a false flag when a player is Programmatic
                         # Check for "Player_1" or "Player 1" keys
                         if "Player_1" in players:
-                            if "programmatic" in players['Player_1'].lower():
+                            if _is_programmatic(players['Player_1']):
                                 player1 = False
                         elif "Player 1" in players:
-                            if "programmatic" in players['Player 1'].lower():
+                            if _is_programmatic(players['Player 1']):
                                 player1 = False
 
                         if "Player_2" in players:
-                            if "programmatic" in players['Player_2'].lower():
+                            if _is_programmatic(players['Player_2']):
                                 player2 = False
                         elif "Player 2" in players:
-                            if "programmatic" in players['Player 2'].lower():
+                            if _is_programmatic(players['Player 2']):
                                 player2 = False 
 
                         turns = json_data['turns']
